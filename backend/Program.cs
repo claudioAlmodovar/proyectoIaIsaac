@@ -119,7 +119,9 @@ app.MapPost("/auth/login", async (LoginRequest request, SqlConnection connection
 
     if (!autenticado || usuario is null)
     {
-        return Results.Unauthorized(new { message = string.IsNullOrWhiteSpace(mensaje) ? "Credenciales inválidas." : mensaje });
+        return Results.Json(
+            new { message = string.IsNullOrWhiteSpace(mensaje) ? "Credenciales inválidas." : mensaje },
+            statusCode: StatusCodes.Status401Unauthorized);
     }
 
     var respuesta = new LoginResponse(
