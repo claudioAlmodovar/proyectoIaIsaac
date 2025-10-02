@@ -114,7 +114,7 @@ const feedback = computed(() => {
   }
 })
 
-const apiBaseUrl = computed(() => import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000')
+const apiBaseUrl = computed(() => import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:7240')
 
 async function onSubmit() {
   if (isSubmitting.value) return
