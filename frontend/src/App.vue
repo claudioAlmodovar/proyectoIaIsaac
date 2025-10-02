@@ -8,9 +8,9 @@ import HelloWorld from './components/HelloWorld.vue'
   >
     <section class="mx-auto flex max-w-5xl flex-col gap-16 px-6 py-20 text-center">
       <header class="space-y-6">
-        <p class="text-sm uppercase tracking-[0.4em] text-sky-300/80">Sistema Farma Leado</p>
+        <p class="text-sm uppercase tracking-[0.4em] text-sky-300/80">Sistema Clinica Magica</p>
         <h1 class="text-4xl font-bold leading-tight md:text-5xl">
-          Bienvenido a la plataforma operativa de Farma Leado
+          Bienvenido a la plataforma operativa de Clinica Magica
         </h1>
         <p class="mx-auto max-w-3xl text-lg text-sky-100/80">
           Centraliza tus procesos farmacéuticos con herramientas diseñadas para equipos modernos.
@@ -24,7 +24,7 @@ import HelloWorld from './components/HelloWorld.vue'
             Explorar soluciones
           </button>
           <span class="text-sm text-sky-200/70">
-            Descubre cómo Farma Leado simplifica la gestión farmacéutica.
+            Descubre cómo Clinica Magica simplifica la gestión farmacéutica.
           </span>
         </div>
       </header>
