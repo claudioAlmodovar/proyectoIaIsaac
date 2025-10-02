@@ -31,7 +31,7 @@ const features = [
     <div class="space-y-3 text-center md:text-left">
       <h2 class="text-2xl font-semibold text-sky-100 md:text-3xl">{{ msg }}</h2>
       <p class="text-base text-sky-200/80">
-        Las herramientas de Farma Leado están diseñadas para conectar cada área del negocio farmacéutico y
+        Las herramientas de Clinica Magica están diseñadas para conectar cada área del negocio farmacéutico y
         mantener la operación bajo control.
       </p>
     </div>
