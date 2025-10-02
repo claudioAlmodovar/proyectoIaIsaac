@@ -1,7 +1,22 @@
+using Microsoft.Data.SqlClient;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddScoped<SqlConnection>(sp =>
+{
+    var configuration = sp.GetRequiredService<IConfiguration>();
+    var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new InvalidOperationException("La cadena de conexión 'DefaultConnection' no está configurada.");
+    }
+
+    return new SqlConnection(connectionString);
+});
 
 var app = builder.Build();
 
@@ -14,6 +29,30 @@ if (app.Environment.IsDevelopment())
 app.MapGet("/", () =>
     Results.Ok(new { message = "API minimal ASP.NET Core lista." })
 );
+
+app.MapGet("/health/database", async (SqlConnection connection, CancellationToken cancellationToken) =>
+{
+    try
+    {
+        await connection.OpenAsync(cancellationToken);
+        return Results.Ok(new { message = "Conexión con SQL Server exitosa." });
+    }
+    catch (SqlException ex)
+    {
+        return Results.Problem(
+            title: "Error al conectar con la base de datos",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status503ServiceUnavailable
+        );
+    }
+    finally
+    {
+        if (connection.State != System.Data.ConnectionState.Closed)
+        {
+            await connection.CloseAsync();
+        }
+    }
+});
 
 var todos = new List<TodoItem>
 {
