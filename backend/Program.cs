@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.Data.SqlClient;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -54,6 +55,80 @@ app.MapGet("/health/database", async (SqlConnection connection, CancellationToke
     }
 });
 
+app.MapPost("/auth/login", async (LoginRequest request, SqlConnection connection, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+    {
+        return Results.BadRequest(new { message = "El correo y la contraseña son obligatorios." });
+    }
+
+    await connection.OpenAsync(cancellationToken);
+
+    await using var command = new SqlCommand("dbo.procUsuariosValidarAcceso", connection)
+    {
+        CommandType = CommandType.StoredProcedure
+    };
+
+    command.Parameters.Add(new SqlParameter("@pCorreo", SqlDbType.NVarChar, 320)
+    {
+        Value = request.Email.Trim()
+    });
+
+    command.Parameters.Add(new SqlParameter("@pPassword", SqlDbType.NVarChar, 255)
+    {
+        Value = request.Password
+    });
+
+    var mensajeParametro = new SqlParameter("@pMsg", SqlDbType.VarChar, 300)
+    {
+        Direction = ParameterDirection.Output
+    };
+    command.Parameters.Add(mensajeParametro);
+
+    var resultadoParametro = new SqlParameter("@pResultado", SqlDbType.Bit)
+    {
+        Direction = ParameterDirection.Output
+    };
+    command.Parameters.Add(resultadoParametro);
+
+    UsuarioDto? usuario = null;
+
+    try
+    {
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (reader.HasRows && await reader.ReadAsync(cancellationToken))
+        {
+            var id = reader.GetInt32(reader.GetOrdinal("Id"));
+            var correo = reader.GetString(reader.GetOrdinal("Correo"));
+            var nombreCompleto = reader.GetString(reader.GetOrdinal("Nombre_Completo"));
+
+            usuario = new UsuarioDto(id, correo, nombreCompleto);
+        }
+    }
+    finally
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            await connection.CloseAsync();
+        }
+    }
+
+    var autenticado = resultadoParametro.Value is bool resultado && resultado;
+    var mensaje = mensajeParametro.Value as string;
+
+    if (!autenticado || usuario is null)
+    {
+        return Results.Unauthorized(new { message = string.IsNullOrWhiteSpace(mensaje) ? "Credenciales inválidas." : mensaje });
+    }
+
+    var respuesta = new LoginResponse(
+        string.IsNullOrWhiteSpace(mensaje) ? "Autenticación exitosa." : mensaje,
+        usuario);
+
+    return Results.Ok(respuesta);
+});
+
 var todos = new List<TodoItem>
 {
     new(1, "Configurar base de datos"),
@@ -103,3 +178,6 @@ app.MapDelete("/todos/{id:int}", (int id) =>
 app.Run();
 
 record TodoItem(int Id, string Title);
+record LoginRequest(string Email, string Password);
+record LoginResponse(string Message, UsuarioDto Usuario);
+record UsuarioDto(int Id, string Correo, string NombreCompleto);
