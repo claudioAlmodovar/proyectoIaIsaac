@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "noEmit": true,
+    "strict": true,
+    "target": "ES2020",
+    "types": ["node"]
+  },
+  "include": ["vite.config.ts"]
+}
