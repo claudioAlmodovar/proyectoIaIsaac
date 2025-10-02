@@ -7,34 +7,42 @@ defineProps<Props>()
 
 const features = [
   {
-    title: 'Configuración moderna',
+    title: 'Inventario inteligente',
     description:
-      'Vite proporciona recarga instantánea y compilaciones rápidas para mejorar tu productividad diaria.'
+      'Controla existencias y fechas de caducidad en tiempo real con alertas automáticas para cada sucursal.'
   },
   {
-    title: 'TypeScript listo para usar',
+    title: 'Trazabilidad regulatoria',
     description:
-      'Obtén tipos estrictos y autocompletado para mantener tu código robusto a medida que crece.'
+      'Genera reportes y bitácoras listos para auditorías, asegurando el cumplimiento de normativas sanitarias.'
   },
   {
-    title: 'Estilos con Tailwind CSS',
+    title: 'Analítica accionable',
     description:
-      'Utiliza utilidades listas para crear diseños consistentes sin salir del flujo de trabajo.'
+      'Visualiza ventas, demanda y desempeño de proveedores para decidir con datos confiables.'
   }
 ]
 </script>
 
 <template>
-  <section class="space-y-8 rounded-3xl border border-slate-800 bg-slate-950/60 p-10 shadow-2xl shadow-slate-950">
-    <h2 class="text-2xl font-semibold text-slate-100 md:text-3xl">{{ msg }}</h2>
+  <section
+    class="space-y-8 rounded-3xl border border-blue-900/60 bg-blue-950/60 p-10 text-left shadow-2xl shadow-blue-950/40 backdrop-blur"
+  >
+    <div class="space-y-3 text-center md:text-left">
+      <h2 class="text-2xl font-semibold text-sky-100 md:text-3xl">{{ msg }}</h2>
+      <p class="text-base text-sky-200/80">
+        Las herramientas de Farma Leado están diseñadas para conectar cada área del negocio farmacéutico y
+        mantener la operación bajo control.
+      </p>
+    </div>
     <div class="grid gap-8 md:grid-cols-3">
       <article
         v-for="feature in features"
         :key="feature.title"
-        class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-left"
+        class="space-y-3 rounded-2xl border border-sky-900/60 bg-slate-950/40 p-6"
       >
-        <h3 class="text-xl font-semibold text-teal-300">{{ feature.title }}</h3>
-        <p class="text-sm leading-relaxed text-slate-300">{{ feature.description }}</p>
+        <h3 class="text-xl font-semibold text-sky-300">{{ feature.title }}</h3>
+        <p class="text-sm leading-relaxed text-sky-100/80">{{ feature.description }}</p>
       </article>
     </div>
   </section>
