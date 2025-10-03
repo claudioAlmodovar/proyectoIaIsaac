@@ -34,14 +34,14 @@ BEGIN
     CREATE TABLE dbo.Pacientes
     (
         Id               INT IDENTITY(1, 1) PRIMARY KEY,
-        Primer_Nombre    NVARCHAR(100) NOT NULL,
-        Segundo_Nombre   NVARCHAR(100) NULL,
-        Apellido_Paterno NVARCHAR(100) NOT NULL,
-        Apellido_Materno NVARCHAR(100) NULL,
-        Telefono         NVARCHAR(25)  NULL,
-        Activo           BIT           NOT NULL DEFAULT (1),
-        Fecha_Creacion   DATETIME2(0)  NOT NULL DEFAULT (SYSUTCDATETIME())
+        NombreCompleto   NVARCHAR(200) NOT NULL,
+        Identificador    NVARCHAR(50)  NOT NULL,
+        FechaNacimiento  DATE          NOT NULL,
+        Sexo             CHAR(1)       NOT NULL CHECK (Sexo IN ('M', 'F')),
+        FechaAlta        DATE          NOT NULL CONSTRAINT DF_Pacientes_FechaAlta DEFAULT (CONVERT(DATE, GETDATE()))
     );
+
+    CREATE UNIQUE INDEX UX_Pacientes_Identificador ON dbo.Pacientes (Identificador);
 END;
 GO
 
@@ -68,17 +68,12 @@ BEGIN
     CREATE TABLE dbo.Consultas
     (
         Id               INT IDENTITY(1, 1) PRIMARY KEY,
-        Id_Medico        INT NOT NULL,
-        Id_Paciente      INT NOT NULL,
-        Sintomas         NVARCHAR(MAX) NULL,
-        Recomendaciones  NVARCHAR(MAX) NULL,
-        Diagnostico      NVARCHAR(MAX) NULL,
-        Fecha_Creacion   DATETIME2(0) NOT NULL DEFAULT (SYSUTCDATETIME()),
-        CONSTRAINT FK_Consultas_Medicos FOREIGN KEY (Id_Medico) REFERENCES dbo.Medicos (Id),
-        CONSTRAINT FK_Consultas_Pacientes FOREIGN KEY (Id_Paciente) REFERENCES dbo.Pacientes (Id)
+        PacienteId       INT NOT NULL,
+        Fecha            DATETIME2(0) NOT NULL CONSTRAINT DF_Consultas_Fecha DEFAULT (SYSUTCDATETIME()),
+        Notas            NVARCHAR(MAX) NOT NULL,
+        CONSTRAINT FK_Consultas_Pacientes FOREIGN KEY (PacienteId) REFERENCES dbo.Pacientes (Id)
     );
 
-    CREATE INDEX IX_Consultas_Id_Medico ON dbo.Consultas (Id_Medico);
-    CREATE INDEX IX_Consultas_Id_Paciente ON dbo.Consultas (Id_Paciente);
+    CREATE INDEX IX_Consultas_PacienteId_Fecha ON dbo.Consultas (PacienteId, Fecha DESC);
 END;
 GO
