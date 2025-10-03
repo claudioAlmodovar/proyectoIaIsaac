@@ -12,7 +12,6 @@ const state = reactive({
   showNewPatientForm: false,
   newPatient: {
     nombreCompleto: '',
-    identificador: '',
     fechaNacimiento: '',
     sexo: 'F' as 'M' | 'F'
   }
@@ -40,7 +39,6 @@ const sexoOptions = [
 function resetForm() {
   state.newPatient = {
     nombreCompleto: '',
-    identificador: '',
     fechaNacimiento: '',
     sexo: 'F'
   }
@@ -75,7 +73,6 @@ async function handleCreatePatient() {
   try {
     const patient = await store.createPatient({
       nombreCompleto: state.newPatient.nombreCompleto.trim(),
-      identificador: state.newPatient.identificador.trim(),
       fechaNacimiento: state.newPatient.fechaNacimiento,
       sexo: state.newPatient.sexo
     })
@@ -100,7 +97,6 @@ function cancelCreatePatient() {
 const canCreatePatient = computed(() => {
   return (
     state.newPatient.nombreCompleto.trim().length > 0 &&
-    state.newPatient.identificador.trim().length > 0 &&
     state.newPatient.fechaNacimiento.trim().length > 0
   )
 })
@@ -165,23 +161,13 @@ onBeforeUnmount(() => {
         <div v-if="state.showNewPatientForm" class="mt-6 space-y-4 rounded-2xl border border-slate-800/60 bg-slate-950/60 p-4">
           <h3 class="text-sm font-semibold text-white">Registrar nuevo paciente</h3>
           <div class="grid gap-4 md:grid-cols-2">
-            <div class="space-y-2">
+            <div class="space-y-2 md:col-span-2">
               <label class="text-xs font-medium text-slate-300" for="nuevo-nombre">Nombre completo</label>
               <input
                 id="nuevo-nombre"
                 v-model="state.newPatient.nombreCompleto"
                 class="w-full rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
                 placeholder="Nombre y apellidos"
-                type="text"
-              />
-            </div>
-            <div class="space-y-2">
-              <label class="text-xs font-medium text-slate-300" for="nuevo-identificador">Identificador clínico</label>
-              <input
-                id="nuevo-identificador"
-                v-model="state.newPatient.identificador"
-                class="w-full rounded-2xl border border-slate-700 bg-slate-950/70 px-4 py-3 text-sm text-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
-                placeholder="Ej. CLM-010"
                 type="text"
               />
             </div>
@@ -205,6 +191,9 @@ onBeforeUnmount(() => {
               </select>
             </div>
           </div>
+          <p class="text-xs text-slate-400">
+            El identificador clínico se generará automáticamente cuando guardes al paciente.
+          </p>
           <p v-if="creationError" class="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
             {{ creationError }}
           </p>

@@ -20,7 +20,6 @@ export interface ConsultationHistoryEntry extends Consultation {
 
 export interface CreatePatientPayload {
   nombreCompleto: string
-  identificador: string
   fechaNacimiento: string
   sexo: 'M' | 'F'
 }

@@ -206,6 +206,44 @@ BEGIN
 END;
 GO
 
+DECLARE @PasswordMedicos NVARCHAR(255) = N'Clinica123';
+DECLARE @HashMedicos NVARCHAR(255) = CONVERT(VARCHAR(255), HASHBYTES('SHA1', CONVERT(NVARCHAR(4000), @PasswordMedicos)), 2);
+
+DECLARE @MedicoAnaId INT;
+SELECT @MedicoAnaId = Id FROM dbo.Medicos WHERE Cedula = N'MED-00123';
+
+IF @MedicoAnaId IS NULL
+BEGIN
+    INSERT INTO dbo.Medicos (Primer_Nombre, Segundo_Nombre, Apellido_Paterno, Apellido_Materno, Cedula, Telefono, Especialidad, Email)
+    VALUES (N'Ana', N'María', N'Romero', N'González', N'MED-00123', N'555-123-001', N'Cardiología', N'ana.romero@clinicamagica.test');
+
+    SET @MedicoAnaId = SCOPE_IDENTITY();
+END;
+
+DECLARE @MedicoLuisId INT;
+SELECT @MedicoLuisId = Id FROM dbo.Medicos WHERE Cedula = N'MED-00234';
+
+IF @MedicoLuisId IS NULL
+BEGIN
+    INSERT INTO dbo.Medicos (Primer_Nombre, Segundo_Nombre, Apellido_Paterno, Apellido_Materno, Cedula, Telefono, Especialidad, Email)
+    VALUES (N'Luis', NULL, N'Fuentes', N'Maldonado', N'MED-00234', N'555-123-002', N'Medicina Interna', N'luis.fuentes@clinicamagica.test');
+
+    SET @MedicoLuisId = SCOPE_IDENTITY();
+END;
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Usuarios WHERE Correo = N'ana.romero@clinicamagica.test')
+BEGIN
+    INSERT INTO dbo.Usuarios (Correo, PasswordHash, Nombre_Completo, IdMedico, Activo)
+    VALUES (N'ana.romero@clinicamagica.test', @HashMedicos, N'Dra. Ana María Romero', @MedicoAnaId, 1);
+END;
+
+IF NOT EXISTS (SELECT 1 FROM dbo.Usuarios WHERE Correo = N'luis.fuentes@clinicamagica.test')
+BEGIN
+    INSERT INTO dbo.Usuarios (Correo, PasswordHash, Nombre_Completo, IdMedico, Activo)
+    VALUES (N'luis.fuentes@clinicamagica.test', @HashMedicos, N'Dr. Luis Fuentes Maldonado', @MedicoLuisId, 1);
+END;
+GO
+
 INSERT INTO dbo.Pacientes (NombreCompleto, Identificador, FechaNacimiento, Sexo, FechaAlta)
 SELECT N'María López Hernández', N'CLM-001', '1987-03-15', 'F', CONVERT(DATE, DATEADD(DAY, -120, GETDATE()))
 WHERE NOT EXISTS (SELECT 1 FROM dbo.Pacientes WHERE Identificador = N'CLM-001');

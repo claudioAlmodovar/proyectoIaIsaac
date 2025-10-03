@@ -51,10 +51,26 @@ const userName = computed(() => currentUser.value?.nombreCompleto ?? 'Equipo mé
           <h3 class="text-lg font-semibold text-white">Administración</h3>
           <span class="text-2xl" aria-hidden="true">🗂️</span>
         </div>
-        <p class="text-sm text-slate-300/80">
-          Próximamente podrás administrar inventarios, personal y reportes administrativos desde este módulo. Mientras tanto,
-          puedes mantener tus registros clínicos al día desde la sección de consultas.
-        </p>
+        <ul class="space-y-4 text-sm">
+          <li>
+            <RouterLink
+              :to="{ name: 'admin-usuarios' }"
+              class="flex items-center justify-between rounded-2xl border border-slate-800/60 px-4 py-4 font-medium text-slate-200 transition hover:border-sky-500/60 hover:bg-slate-800/60"
+            >
+              <span>CRUD de usuarios</span>
+              <span aria-hidden="true">→</span>
+            </RouterLink>
+          </li>
+          <li>
+            <RouterLink
+              :to="{ name: 'admin-medicos' }"
+              class="flex items-center justify-between rounded-2xl border border-slate-800/60 px-4 py-4 font-medium text-slate-200 transition hover:border-sky-500/60 hover:bg-slate-800/60"
+            >
+              <span>CRUD de médicos</span>
+              <span aria-hidden="true">→</span>
+            </RouterLink>
+          </li>
+        </ul>
       </div>
     </div>
   </section>
