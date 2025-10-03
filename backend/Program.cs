@@ -605,24 +605,30 @@ static bool TryParseDateRange(string? startDate, string? endDate, out DateTime? 
     end = null;
     error = null;
 
-    if (!string.IsNullOrWhiteSpace(startDate) && !DateTime.TryParse(startDate, out var parsedStart))
+    var hasStart = !string.IsNullOrWhiteSpace(startDate);
+    var hasEnd = !string.IsNullOrWhiteSpace(endDate);
+
+    DateTime parsedStart = default;
+    DateTime parsedEnd = default;
+
+    if (hasStart && !DateTime.TryParse(startDate, out parsedStart))
     {
         error = "La fecha inicial no tiene un formato válido.";
         return false;
     }
 
-    if (!string.IsNullOrWhiteSpace(endDate) && !DateTime.TryParse(endDate, out var parsedEnd))
+    if (hasEnd && !DateTime.TryParse(endDate, out parsedEnd))
     {
         error = "La fecha final no tiene un formato válido.";
         return false;
     }
 
-    if (!string.IsNullOrWhiteSpace(startDate))
+    if (hasStart)
     {
         start = parsedStart.Date;
     }
 
-    if (!string.IsNullOrWhiteSpace(endDate))
+    if (hasEnd)
     {
         end = parsedEnd.Date.AddDays(1).AddTicks(-1);
     }
