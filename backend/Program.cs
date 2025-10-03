@@ -167,10 +167,11 @@ app.MapPost("/auth/login", async (LoginRequest request, SqlConnection connection
     return Results.Ok(respuesta);
 });
 
-app.MapGet("/medics", async (string? search, SqlConnection connection, CancellationToken cancellationToken, bool includeInactive = false) =>
+app.MapGet("/medics", async (string? search, SqlConnection connection, CancellationToken cancellationToken, bool? includeInactive) =>
 {
     var medicos = new List<MedicDto>();
     var searchTerm = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+    var includeInactiveValue = includeInactive ?? false;
 
     try
     {
@@ -197,7 +198,7 @@ app.MapGet("/medics", async (string? search, SqlConnection connection, Cancellat
 
         command.Parameters.Add(new SqlParameter("@includeInactive", SqlDbType.Bit)
         {
-            Value = includeInactive
+            Value = includeInactiveValue
         });
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -435,10 +436,11 @@ app.MapDelete("/medics/{id:int}", async (int id, SqlConnection connection, Cance
         : Results.NotFound(new { message = "Médico no encontrado." });
 });
 
-app.MapGet("/users", async (string? search, SqlConnection connection, CancellationToken cancellationToken, bool includeInactive = false) =>
+app.MapGet("/users", async (string? search, SqlConnection connection, CancellationToken cancellationToken, bool? includeInactive) =>
 {
     var usuarios = new List<UserDto>();
     var searchTerm = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+    var includeInactiveValue = includeInactive ?? false;
 
     try
     {
@@ -473,7 +475,7 @@ app.MapGet("/users", async (string? search, SqlConnection connection, Cancellati
 
         command.Parameters.Add(new SqlParameter("@includeInactive", SqlDbType.Bit)
         {
-            Value = includeInactive
+            Value = includeInactiveValue
         });
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
