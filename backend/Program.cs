@@ -583,16 +583,6 @@ app.MapPost("/consultations", async (CreateConsultationRequest request, SqlConne
 
 app.Run();
 
-record LoginRequest(string Email, string Password);
-record LoginResponse(string Message, UsuarioDto Usuario);
-record UsuarioDto(int Id, string Correo, string NombreCompleto);
-record PatientDto(int Id, string NombreCompleto, string Identificador, string FechaNacimiento, string Sexo, string FechaAlta);
-record PatientSummaryDto(int Id, string NombreCompleto, string Identificador, string Sexo, string FechaNacimiento, string FechaAlta);
-record ConsultationDto(int Id, int PacienteId, string Fecha, string Notas);
-record ConsultationHistoryDto(int Id, int PacienteId, string Fecha, string Notas, PatientSummaryDto Paciente);
-record CreatePatientRequest(string NombreCompleto, string Identificador, string FechaNacimiento, string Sexo);
-record CreateConsultationRequest(int PacienteId, string Notas, string? Fecha);
-
 static string FormatDateOnly(DateTime dateTime)
     => dateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
@@ -641,3 +631,13 @@ static bool TryParseDateRange(string? startDate, string? endDate, out DateTime? 
 
     return true;
 }
+
+record LoginRequest(string Email, string Password);
+record LoginResponse(string Message, UsuarioDto Usuario);
+record UsuarioDto(int Id, string Correo, string NombreCompleto);
+record PatientDto(int Id, string NombreCompleto, string Identificador, string FechaNacimiento, string Sexo, string FechaAlta);
+record PatientSummaryDto(int Id, string NombreCompleto, string Identificador, string Sexo, string FechaNacimiento, string FechaAlta);
+record ConsultationDto(int Id, int PacienteId, string Fecha, string Notas);
+record ConsultationHistoryDto(int Id, int PacienteId, string Fecha, string Notas, PatientSummaryDto Paciente);
+record CreatePatientRequest(string NombreCompleto, string Identificador, string FechaNacimiento, string Sexo);
+record CreateConsultationRequest(int PacienteId, string Notas, string? Fecha);
