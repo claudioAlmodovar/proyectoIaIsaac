@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useClinicStore } from '../../stores/clinicStore'
 
 const store = useClinicStore()
@@ -19,23 +19,41 @@ function defaultStartDate() {
 
 const startDate = ref(defaultStartDate())
 const endDate = ref(new Date().toISOString().slice(0, 10))
+const isLoading = ref(false)
+const loadError = ref<string | null>(null)
 
-const filteredConsultations = computed(() => {
+const records = computed(() => store.consultationHistory.value)
+
+async function loadHistory() {
+  if (!startDate.value || !endDate.value) {
+    return
+  }
+
   const start = new Date(startDate.value)
-  start.setHours(0, 0, 0, 0)
   const end = new Date(endDate.value)
-  end.setHours(23, 59, 59, 999)
 
-  return store.consultations.value.filter((consulta) => {
-    const date = new Date(consulta.fecha)
-    return date >= start && date <= end
-  })
-})
+  if (start > end) {
+    loadError.value = 'La fecha inicial no puede ser posterior a la fecha final.'
+    isLoading.value = false
+    return
+  }
 
-const patientsById = computed(() => {
-  const map = new Map(store.patients.value.map((patient) => [patient.id, patient]))
-  return map
-})
+  isLoading.value = true
+  loadError.value = null
+
+  try {
+    await store.loadConsultationHistory(startDate.value, endDate.value)
+  } catch (error) {
+    loadError.value =
+      error instanceof Error ? error.message : 'No fue posible obtener el historial de consultas.'
+  } finally {
+    isLoading.value = false
+  }
+}
+
+watch([startDate, endDate], () => {
+  void loadHistory()
+}, { immediate: true })
 </script>
 
 <template>
@@ -73,40 +91,51 @@ const patientsById = computed(() => {
     </div>
 
     <div class="rounded-3xl border border-slate-800/60 bg-slate-900/60">
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-slate-800 text-sm">
-          <thead class="bg-slate-900/60 text-xs uppercase tracking-[0.35em] text-slate-400/70">
-            <tr>
-              <th class="px-6 py-4 text-left">Paciente</th>
-              <th class="px-6 py-4 text-left">Fecha</th>
-              <th class="px-6 py-4 text-left">Notas</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="consulta in filteredConsultations"
-              :key="consulta.id"
-              class="border-b border-slate-800/60 text-slate-200 transition hover:bg-slate-800/40"
-            >
-              <td class="px-6 py-4">
-                <p class="font-semibold text-white">
-                  {{ patientsById.get(consulta.pacienteId)?.nombreCompleto ?? 'Paciente no registrado' }}
-                </p>
-                <p class="text-xs text-slate-400">
-                  {{ patientsById.get(consulta.pacienteId)?.identificador ?? 'N/A' }}
-                </p>
-              </td>
-              <td class="px-6 py-4 text-xs text-slate-300">{{ formatDate(consulta.fecha) }}</td>
-              <td class="px-6 py-4 text-xs text-slate-300/80">
-                <p class="max-h-32 overflow-y-auto whitespace-pre-line">{{ consulta.notas }}</p>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-if="loadError" class="p-6 text-center text-sm text-rose-200">
+        {{ loadError }}
       </div>
-      <p v-if="filteredConsultations.length === 0" class="p-6 text-center text-sm text-slate-400">
-        No se registran consultas en el rango seleccionado.
-      </p>
+      <div
+        v-else-if="isLoading"
+        class="p-6 text-center text-sm text-slate-300/80"
+      >
+        Cargando historial de consultas…
+      </div>
+      <div v-else>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-slate-800 text-sm">
+            <thead class="bg-slate-900/60 text-xs uppercase tracking-[0.35em] text-slate-400/70">
+              <tr>
+                <th class="px-6 py-4 text-left">Paciente</th>
+                <th class="px-6 py-4 text-left">Fecha</th>
+                <th class="px-6 py-4 text-left">Notas</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="consulta in records"
+                :key="consulta.id"
+                class="border-b border-slate-800/60 text-slate-200 transition hover:bg-slate-800/40"
+              >
+                <td class="px-6 py-4">
+                  <p class="font-semibold text-white">
+                    {{ consulta.paciente.nombreCompleto }}
+                  </p>
+                  <p class="text-xs text-slate-400">
+                    {{ consulta.paciente.identificador }}
+                  </p>
+                </td>
+                <td class="px-6 py-4 text-xs text-slate-300">{{ formatDate(consulta.fecha) }}</td>
+                <td class="px-6 py-4 text-xs text-slate-300/80">
+                  <p class="max-h-32 overflow-y-auto whitespace-pre-line">{{ consulta.notas }}</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-if="records.length === 0" class="p-6 text-center text-sm text-slate-400">
+          No se registran consultas en el rango seleccionado.
+        </p>
+      </div>
     </div>
   </section>
 </template>

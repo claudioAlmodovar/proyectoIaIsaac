@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import type { Patient } from '../../types'
 import { useClinicStore } from '../../stores/clinicStore'
 
 const router = useRouter()
@@ -17,8 +18,19 @@ const state = reactive({
   }
 })
 
-const results = computed(() => store.searchPatients(state.searchTerm))
+const results = ref<Patient[]>([])
+const isLoading = ref(false)
+const loadError = ref<string | null>(null)
+const creationError = ref<string | null>(null)
+const isCreatingPatient = ref(false)
+
 const hasSearch = computed(() => state.searchTerm.trim().length > 0)
+const showNoResults = computed(
+  () => !isLoading.value && hasSearch.value && results.value.length === 0 && !loadError.value
+)
+const showEmptyState = computed(
+  () => !isLoading.value && !hasSearch.value && results.value.length === 0 && !loadError.value
+)
 
 const sexoOptions = [
   { value: 'F', label: 'Femenino' },
@@ -32,27 +44,52 @@ function resetForm() {
     fechaNacimiento: '',
     sexo: 'F'
   }
+  creationError.value = null
 }
 
 function handleSelect(patientId: number) {
   router.push({ name: 'consultas-nueva', params: { patientId } })
 }
 
-function handleCreatePatient() {
-  if (!state.newPatient.nombreCompleto || !state.newPatient.identificador || !state.newPatient.fechaNacimiento) {
-    return
+async function fetchPatients(term: string) {
+  isLoading.value = true
+  loadError.value = null
+
+  try {
+    results.value = await store.searchPatients(term)
+  } catch (error) {
+    loadError.value =
+      error instanceof Error ? error.message : 'No fue posible obtener la lista de pacientes.'
+    results.value = []
+  } finally {
+    isLoading.value = false
   }
+}
 
-  const patient = store.addPatient({
-    nombreCompleto: state.newPatient.nombreCompleto,
-    identificador: state.newPatient.identificador,
-    fechaNacimiento: state.newPatient.fechaNacimiento,
-    sexo: state.newPatient.sexo
-  })
+async function handleCreatePatient() {
+  if (!canCreatePatient.value || isCreatingPatient.value) return
 
-  state.showNewPatientForm = false
-  resetForm()
-  handleSelect(patient.id)
+  creationError.value = null
+  isCreatingPatient.value = true
+
+  try {
+    const patient = await store.createPatient({
+      nombreCompleto: state.newPatient.nombreCompleto.trim(),
+      identificador: state.newPatient.identificador.trim(),
+      fechaNacimiento: state.newPatient.fechaNacimiento,
+      sexo: state.newPatient.sexo
+    })
+
+    results.value = [patient, ...results.value.filter((item) => item.id !== patient.id)]
+    state.showNewPatientForm = false
+    resetForm()
+    handleSelect(patient.id)
+  } catch (error) {
+    creationError.value =
+      error instanceof Error ? error.message : 'No fue posible registrar al paciente.'
+  } finally {
+    isCreatingPatient.value = false
+  }
 }
 
 function cancelCreatePatient() {
@@ -68,7 +105,30 @@ const canCreatePatient = computed(() => {
   )
 })
 
-const showNoResults = computed(() => hasSearch.value && results.value.length === 0)
+let searchTimeout: number | undefined
+
+watch(
+  () => state.searchTerm,
+  (term) => {
+    if (searchTimeout) {
+      window.clearTimeout(searchTimeout)
+    }
+
+    searchTimeout = window.setTimeout(() => {
+      void fetchPatients(term)
+    }, 350)
+  }
+)
+
+onMounted(() => {
+  void fetchPatients(state.searchTerm)
+})
+
+onBeforeUnmount(() => {
+  if (searchTimeout) {
+    window.clearTimeout(searchTimeout)
+  }
+})
 </script>
 
 <template>
@@ -145,17 +205,21 @@ const showNoResults = computed(() => hasSearch.value && results.value.length ===
               </select>
             </div>
           </div>
+          <p v-if="creationError" class="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+            {{ creationError }}
+          </p>
           <div class="flex flex-col gap-3 pt-2 sm:flex-row">
             <button
               class="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-emerald-500/60"
-              :disabled="!canCreatePatient"
+              :disabled="!canCreatePatient || isCreatingPatient"
               type="button"
               @click="handleCreatePatient"
             >
-              Guardar y crear consulta
+              {{ isCreatingPatient ? 'Guardando…' : 'Guardar y crear consulta' }}
             </button>
             <button
               class="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl border border-slate-800/60 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:border-rose-400/60 hover:text-rose-200"
+              :disabled="isCreatingPatient"
               type="button"
               @click="cancelCreatePatient"
             >
@@ -169,9 +233,30 @@ const showNoResults = computed(() => hasSearch.value && results.value.length ===
     <div class="space-y-4">
       <h3 class="text-sm font-semibold uppercase tracking-[0.35em] text-slate-400/70">Resultados</h3>
 
-      <div v-if="showNoResults" class="rounded-3xl border border-slate-800/60 bg-slate-900/60 p-8 text-center text-sm text-slate-300/80">
+      <div
+        v-if="loadError"
+        class="rounded-3xl border border-rose-500/40 bg-rose-500/10 p-6 text-sm text-rose-200"
+      >
+        {{ loadError }}
+      </div>
+      <div
+        v-else-if="isLoading"
+        class="rounded-3xl border border-slate-800/60 bg-slate-900/60 p-8 text-center text-sm text-slate-300/80"
+      >
+        Cargando pacientes…
+      </div>
+      <div
+        v-else-if="showNoResults"
+        class="rounded-3xl border border-slate-800/60 bg-slate-900/60 p-8 text-center text-sm text-slate-300/80"
+      >
         <p>No se encontraron pacientes con el criterio proporcionado.</p>
         <p class="mt-2">Puedes darlos de alta con el botón "Dar de alta paciente".</p>
+      </div>
+      <div
+        v-else-if="showEmptyState"
+        class="rounded-3xl border border-slate-800/60 bg-slate-900/60 p-8 text-center text-sm text-slate-300/80"
+      >
+        Aún no hay pacientes registrados en el sistema. Utiliza la opción "Dar de alta paciente" para comenzar.
       </div>
 
       <ul v-else class="grid gap-4 lg:grid-cols-2">

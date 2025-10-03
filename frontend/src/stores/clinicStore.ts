@@ -1,123 +1,103 @@
-import { computed, reactive } from 'vue'
-import type { Consultation, Patient } from '../types'
+import { computed, reactive, ref } from 'vue'
+import * as clinicApi from '../services/clinicApi'
+import type {
+  Consultation,
+  ConsultationHistoryEntry,
+  CreateConsultationPayload,
+  CreatePatientPayload,
+  Patient
+} from '../types'
 
-const initialPatients: Patient[] = [
-  {
-    id: 1,
-    nombreCompleto: 'María López Hernández',
-    identificador: 'CLM-001',
-    fechaNacimiento: '1987-03-15',
-    sexo: 'F',
-    fechaAlta: '2024-01-03'
-  },
-  {
-    id: 2,
-    nombreCompleto: 'Jorge Ramírez Castillo',
-    identificador: 'CLM-002',
-    fechaNacimiento: '1979-11-02',
-    sexo: 'M',
-    fechaAlta: '2023-12-18'
-  },
-  {
-    id: 3,
-    nombreCompleto: 'Paulina Sánchez Ríos',
-    identificador: 'CLM-003',
-    fechaNacimiento: '1992-07-28',
-    sexo: 'F',
-    fechaAlta: '2023-11-25'
-  }
-]
-
-const initialConsultations: Consultation[] = [
-  {
-    id: 1,
-    pacienteId: 1,
-    fecha: new Date().toISOString(),
-    notas: 'Control general sin novedades. Se recomienda continuar con dieta equilibrada y ejercicio moderado.'
-  },
-  {
-    id: 2,
-    pacienteId: 2,
-    fecha: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
-    notas: 'Revisión de seguimiento para hipertensión. Ajuste de medicación nocturna.'
-  },
-  {
-    id: 3,
-    pacienteId: 1,
-    fecha: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(),
-    notas: 'Se registra mejoría en niveles de glucosa. Mantener monitoreo cada 15 días.'
-  }
-]
-
-const state = reactive({
-  patients: [...initialPatients],
-  consultations: [...initialConsultations],
-  nextPatientId: initialPatients.length + 1,
-  nextConsultationId: initialConsultations.length + 1
-})
+const patientsState = ref<Patient[]>([])
+const consultationHistoryState = ref<ConsultationHistoryEntry[]>([])
+const patientsCache = reactive(new Map<number, Patient>())
+const consultationsByPatientCache = reactive(new Map<number, Consultation[]>())
 
 export function useClinicStore() {
-  const patients = computed(() => state.patients)
-  const consultations = computed(() =>
-    [...state.consultations].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
-  )
+  const patients = computed(() => patientsState.value)
+  const consultationHistory = computed(() => consultationHistoryState.value)
 
-  function searchPatients(term: string) {
-    const normalizedTerm = term.trim().toLowerCase()
-    if (!normalizedTerm) {
-      return state.patients
-    }
+  async function searchPatients(term: string) {
+    const results = await clinicApi.searchPatients(term)
+    patientsState.value = results
 
-    return state.patients.filter((patient) => {
-      const fullName = patient.nombreCompleto.toLowerCase()
-      const identifier = patient.identificador.toLowerCase()
-      return fullName.includes(normalizedTerm) || identifier.includes(normalizedTerm)
+    results.forEach((patient) => {
+      patientsCache.set(patient.id, patient)
     })
+
+    return results
   }
 
-  function addPatient(payload: Omit<Patient, 'id' | 'fechaAlta'> & { fechaAlta?: string }) {
-    const newPatient: Patient = {
-      id: state.nextPatientId++,
-      fechaAlta: payload.fechaAlta ?? new Date().toISOString().slice(0, 10),
-      nombreCompleto: payload.nombreCompleto,
-      identificador: payload.identificador,
-      fechaNacimiento: payload.fechaNacimiento,
-      sexo: payload.sexo
+  async function createPatient(payload: CreatePatientPayload) {
+    const patient = await clinicApi.createPatient(payload)
+
+    patientsCache.set(patient.id, patient)
+    patientsState.value = [patient, ...patientsState.value.filter((item) => item.id !== patient.id)]
+
+    return patient
+  }
+
+  async function getPatientById(id: number) {
+    if (patientsCache.has(id)) {
+      return patientsCache.get(id) ?? null
     }
 
-    state.patients.push(newPatient)
-    return newPatient
-  }
-
-  function addConsultation(payload: Omit<Consultation, 'id' | 'fecha'> & { fecha?: string }) {
-    const newConsultation: Consultation = {
-      id: state.nextConsultationId++,
-      pacienteId: payload.pacienteId,
-      notas: payload.notas,
-      fecha: payload.fecha ?? new Date().toISOString()
+    const patient = await clinicApi.getPatientById(id)
+    if (patient) {
+      patientsCache.set(patient.id, patient)
+      if (!patientsState.value.some((item) => item.id === patient.id)) {
+        patientsState.value = [patient, ...patientsState.value]
+      }
     }
 
-    state.consultations.push(newConsultation)
-    return newConsultation
+    return patient
   }
 
-  function findPatientById(id: number) {
-    return state.patients.find((patient) => patient.id === id) ?? null
+  async function getConsultationsByPatient(patientId: number, limit = 5) {
+    const consultations = await clinicApi.getConsultationsByPatient(patientId, limit)
+    consultationsByPatientCache.set(patientId, consultations)
+    return consultations
   }
 
-  function findConsultationsByPatient(id: number) {
-    return state.consultations
-      .filter((consultation) => consultation.pacienteId === id)
-      .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+  async function createConsultation(payload: CreateConsultationPayload) {
+    const consultation = await clinicApi.createConsultation(payload)
+
+    const cached = consultationsByPatientCache.get(payload.pacienteId)
+    if (cached) {
+      const maxItems = Math.max(cached.length, 1)
+      consultationsByPatientCache.set(
+        payload.pacienteId,
+        [consultation, ...cached].slice(0, maxItems)
+      )
+    }
+
+    return consultation
+  }
+
+  async function loadConsultationHistory(startDate?: string, endDate?: string) {
+    const history = await clinicApi.getConsultationsHistory(startDate, endDate)
+    consultationHistoryState.value = history
+
+    history.forEach((entry) => {
+      patientsCache.set(entry.paciente.id, entry.paciente)
+    })
+
+    return history
+  }
+
+  function getCachedConsultationsByPatient(patientId: number) {
+    return consultationsByPatientCache.get(patientId) ?? []
   }
 
   return {
     patients,
-    consultations,
+    consultationHistory,
     searchPatients,
-    addPatient,
-    addConsultation,
-    findPatientById,
-    findConsultationsByPatient
+    createPatient,
+    getPatientById,
+    getConsultationsByPatient,
+    createConsultation,
+    loadConsultationHistory,
+    getCachedConsultationsByPatient
   }
 }
