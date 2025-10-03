@@ -43,6 +43,16 @@ const router = createRouter({
           path: 'consultas/historial',
           name: 'consultas-historial',
           component: () => import('../views/consultations/ConsultationHistoryView.vue')
+        },
+        {
+          path: 'administracion/usuarios',
+          name: 'admin-usuarios',
+          component: () => import('../views/admin/UsersAdminView.vue')
+        },
+        {
+          path: 'administracion/medicos',
+          name: 'admin-medicos',
+          component: () => import('../views/admin/MedicsAdminView.vue')
         }
       ]
     },

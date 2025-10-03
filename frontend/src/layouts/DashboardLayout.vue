@@ -50,8 +50,8 @@ const navigation = [
     title: 'Administración',
     icon: '🗂️',
     items: [
-      { label: 'Gestión de pacientes', name: 'consultas-buscar', disabled: true },
-      { label: 'Inventario clínico', name: 'dashboard', disabled: true }
+      { label: 'CRUD de usuarios', name: 'admin-usuarios' },
+      { label: 'CRUD de médicos', name: 'admin-medicos' }
     ]
   }
 ]

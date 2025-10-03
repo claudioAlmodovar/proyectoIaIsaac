@@ -1,5 +1,6 @@
 using System.Data;
 using System.Globalization;
+using System.Security.Cryptography;
 using Microsoft.Data.SqlClient;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -269,9 +270,9 @@ app.MapGet("/patients/{id:int}", async (int id, SqlConnection connection, Cancel
 
 app.MapPost("/patients", async (CreatePatientRequest request, SqlConnection connection, CancellationToken cancellationToken) =>
 {
-    if (string.IsNullOrWhiteSpace(request.NombreCompleto) || string.IsNullOrWhiteSpace(request.Identificador))
+    if (string.IsNullOrWhiteSpace(request.NombreCompleto))
     {
-        return Results.BadRequest(new { message = "Nombre completo e identificador son obligatorios." });
+        return Results.BadRequest(new { message = "El nombre completo es obligatorio." });
     }
 
     if (string.IsNullOrWhiteSpace(request.FechaNacimiento) ||
@@ -292,6 +293,8 @@ app.MapPost("/patients", async (CreatePatientRequest request, SqlConnection conn
     {
         await connection.OpenAsync(cancellationToken);
 
+        var identificador = await GenerateUniquePatientIdentifierAsync(connection, cancellationToken);
+
         await using var command = new SqlCommand(
             """
             INSERT INTO dbo.Pacientes (NombreCompleto, Identificador, FechaNacimiento, Sexo)
@@ -307,7 +310,7 @@ app.MapPost("/patients", async (CreatePatientRequest request, SqlConnection conn
 
         command.Parameters.Add(new SqlParameter("@identificador", SqlDbType.NVarChar, 50)
         {
-            Value = request.Identificador.Trim()
+            Value = identificador
         });
 
         command.Parameters.Add(new SqlParameter("@fechaNacimiento", SqlDbType.Date)
@@ -332,10 +335,6 @@ app.MapPost("/patients", async (CreatePatientRequest request, SqlConnection conn
                 reader.GetString(reader.GetOrdinal("Sexo")),
                 FormatDateOnly(reader.GetDateTime(reader.GetOrdinal("FechaAlta"))));
         }
-    }
-    catch (SqlException ex) when (ex.Number is 2601 or 2627)
-    {
-        return Results.BadRequest(new { message = "Ya existe un paciente con el mismo identificador." });
     }
     catch (SqlException ex)
     {
@@ -632,6 +631,34 @@ static bool TryParseDateRange(string? startDate, string? endDate, out DateTime? 
     return true;
 }
 
+static async Task<string> GenerateUniquePatientIdentifierAsync(SqlConnection connection, CancellationToken cancellationToken)
+{
+    const int maxAttempts = 10;
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++)
+    {
+        var identifier = $"PAC-{Convert.ToHexString(RandomNumberGenerator.GetBytes(4))}";
+
+        await using var command = new SqlCommand(
+            "SELECT COUNT(1) FROM dbo.Pacientes WHERE Identificador = @identificador",
+            connection);
+
+        command.Parameters.Add(new SqlParameter("@identificador", SqlDbType.NVarChar, 50)
+        {
+            Value = identifier
+        });
+
+        var exists = (int)await command.ExecuteScalarAsync(cancellationToken);
+
+        if (exists == 0)
+        {
+            return identifier;
+        }
+    }
+
+    throw new InvalidOperationException("No fue posible generar un identificador único para el paciente.");
+}
+
 record LoginRequest(string Email, string Password);
 record LoginResponse(string Message, UsuarioDto Usuario);
 record UsuarioDto(int Id, string Correo, string NombreCompleto);
@@ -639,5 +666,5 @@ record PatientDto(int Id, string NombreCompleto, string Identificador, string Fe
 record PatientSummaryDto(int Id, string NombreCompleto, string Identificador, string Sexo, string FechaNacimiento, string FechaAlta);
 record ConsultationDto(int Id, int PacienteId, string Fecha, string Notas);
 record ConsultationHistoryDto(int Id, int PacienteId, string Fecha, string Notas, PatientSummaryDto Paciente);
-record CreatePatientRequest(string NombreCompleto, string Identificador, string FechaNacimiento, string Sexo);
+record CreatePatientRequest(string NombreCompleto, string FechaNacimiento, string Sexo);
 record CreateConsultationRequest(int PacienteId, string Notas, string? Fecha);
