@@ -167,7 +167,7 @@ app.MapPost("/auth/login", async (LoginRequest request, SqlConnection connection
     return Results.Ok(respuesta);
 });
 
-app.MapGet("/medics", async (string? search, bool includeInactive = false, SqlConnection connection, CancellationToken cancellationToken) =>
+app.MapGet("/medics", async (string? search, SqlConnection connection, CancellationToken cancellationToken, bool includeInactive = false) =>
 {
     var medicos = new List<MedicDto>();
     var searchTerm = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
@@ -435,7 +435,7 @@ app.MapDelete("/medics/{id:int}", async (int id, SqlConnection connection, Cance
         : Results.NotFound(new { message = "Médico no encontrado." });
 });
 
-app.MapGet("/users", async (string? search, bool includeInactive = false, SqlConnection connection, CancellationToken cancellationToken) =>
+app.MapGet("/users", async (string? search, SqlConnection connection, CancellationToken cancellationToken, bool includeInactive = false) =>
 {
     var usuarios = new List<UserDto>();
     var searchTerm = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
