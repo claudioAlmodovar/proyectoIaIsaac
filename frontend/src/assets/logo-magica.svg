@@ -1,0 +1,5 @@
+<svg width="220" height="80" viewBox="0 0 220 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="220" height="80" rx="16" fill="#1E3A8A"/>
+  <path d="M28 22C28 17.5817 31.5817 14 36 14H70C74.4183 14 78 17.5817 78 22V58H36C31.5817 58 28 54.4183 28 50V22Z" fill="#FBBF24"/>
+  <text x="86" y="50" fill="white" font-family="'Montserrat', 'Segoe UI', sans-serif" font-size="36" font-style="italic" font-weight="700">Magica</text>
+</svg>

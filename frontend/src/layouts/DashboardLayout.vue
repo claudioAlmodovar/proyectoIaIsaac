@@ -61,10 +61,17 @@ const navigation = [
   <div class="min-h-screen bg-slate-950 text-slate-100">
     <header class="border-b border-slate-800 bg-slate-900/70 backdrop-blur">
       <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-6 px-6 py-6">
-        <div>
-          <p class="text-sm uppercase tracking-[0.35em] text-sky-400/80">Clínica Mágica</p>
-          <h1 class="mt-1 text-2xl font-semibold text-white">{{ userGreeting }}</h1>
-          <p class="mt-1 max-w-2xl text-sm text-slate-300/80">{{ motivationalPhrase }}</p>
+        <div class="flex items-center gap-6">
+          <img
+            src="@/assets/logo-magica.svg"
+            alt="Logotipo de Magica"
+            class="h-12 w-auto drop-shadow-lg"
+          />
+          <div>
+            <p class="text-sm uppercase tracking-[0.35em] text-sky-400/80">Clínica Mágica</p>
+            <h1 class="mt-1 text-2xl font-semibold text-white">{{ userGreeting }}</h1>
+            <p class="mt-1 max-w-2xl text-sm text-slate-300/80">{{ motivationalPhrase }}</p>
+          </div>
         </div>
         <button
           class="inline-flex items-center gap-2 rounded-full border border-slate-700/60 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-rose-400/60 hover:text-rose-200"
