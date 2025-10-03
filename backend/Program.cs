@@ -78,39 +78,41 @@ app.MapPost("/auth/login", async (LoginRequest request, SqlConnection connection
         return Results.BadRequest(new { message = "El correo y la contraseña son obligatorios." });
     }
 
-    await connection.OpenAsync(cancellationToken);
-
-    await using var command = new SqlCommand("dbo.procUsuariosValidarAcceso", connection)
-    {
-        CommandType = CommandType.StoredProcedure
-    };
-
-    command.Parameters.Add(new SqlParameter("@pCorreo", SqlDbType.NVarChar, 320)
-    {
-        Value = request.Email.Trim()
-    });
-
-    command.Parameters.Add(new SqlParameter("@pPassword", SqlDbType.NVarChar, 255)
-    {
-        Value = request.Password
-    });
-
-    var mensajeParametro = new SqlParameter("@pMsg", SqlDbType.VarChar, 300)
-    {
-        Direction = ParameterDirection.Output
-    };
-    command.Parameters.Add(mensajeParametro);
-
-    var resultadoParametro = new SqlParameter("@pResultado", SqlDbType.Bit)
-    {
-        Direction = ParameterDirection.Output
-    };
-    command.Parameters.Add(resultadoParametro);
-
+    SqlParameter? mensajeParametro = null;
+    SqlParameter? resultadoParametro = null;
     UsuarioDto? usuario = null;
 
     try
     {
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = new SqlCommand("dbo.procUsuariosValidarAcceso", connection)
+        {
+            CommandType = CommandType.StoredProcedure
+        };
+
+        command.Parameters.Add(new SqlParameter("@pCorreo", SqlDbType.NVarChar, 320)
+        {
+            Value = request.Email.Trim()
+        });
+
+        command.Parameters.Add(new SqlParameter("@pPassword", SqlDbType.NVarChar, 255)
+        {
+            Value = request.Password
+        });
+
+        mensajeParametro = new SqlParameter("@pMsg", SqlDbType.VarChar, 300)
+        {
+            Direction = ParameterDirection.Output
+        };
+        command.Parameters.Add(mensajeParametro);
+
+        resultadoParametro = new SqlParameter("@pResultado", SqlDbType.Bit)
+        {
+            Direction = ParameterDirection.Output
+        };
+        command.Parameters.Add(resultadoParametro);
+
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (reader.HasRows && await reader.ReadAsync(cancellationToken))
@@ -122,6 +124,20 @@ app.MapPost("/auth/login", async (LoginRequest request, SqlConnection connection
             usuario = new UsuarioDto(id, correo, nombreCompleto);
         }
     }
+    catch (SqlException ex)
+    {
+        return Results.Problem(
+            title: "Error al consultar la base de datos",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(
+            title: "Error inesperado al procesar la autenticación",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
     finally
     {
         if (connection.State == ConnectionState.Open)
@@ -130,8 +146,8 @@ app.MapPost("/auth/login", async (LoginRequest request, SqlConnection connection
         }
     }
 
-    var autenticado = resultadoParametro.Value is bool resultado && resultado;
-    var mensaje = mensajeParametro.Value as string;
+    var autenticado = resultadoParametro?.Value is bool resultado && resultado;
+    var mensaje = mensajeParametro?.Value as string;
 
     if (!autenticado || usuario is null)
     {
