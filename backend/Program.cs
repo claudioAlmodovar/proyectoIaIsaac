@@ -1,6 +1,8 @@
+using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Data.SqlClient;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -163,6 +165,567 @@ app.MapPost("/auth/login", async (LoginRequest request, SqlConnection connection
         usuario);
 
     return Results.Ok(respuesta);
+});
+
+app.MapGet("/medics", async (string? search, bool includeInactive = false, SqlConnection connection, CancellationToken cancellationToken) =>
+{
+    var medicos = new List<MedicDto>();
+    var searchTerm = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+
+    try
+    {
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = new SqlCommand(
+            """
+            SELECT Id, Primer_Nombre, Segundo_Nombre, Apellido_Paterno, Apellido_Materno, Cedula, Telefono, Especialidad, Email, Activo
+            FROM dbo.Medicos
+            WHERE (@search IS NULL OR (
+                    Primer_Nombre + ' ' + ISNULL(Segundo_Nombre + ' ', '') + Apellido_Paterno + ' ' + ISNULL(Apellido_Materno, '') LIKE @search
+                    OR Cedula LIKE @search
+                    OR Email LIKE @search
+                ))
+              AND (@includeInactive = 1 OR Activo = 1)
+            ORDER BY Apellido_Paterno ASC, Apellido_Materno ASC, Primer_Nombre ASC
+            """,
+            connection);
+
+        command.Parameters.Add(new SqlParameter("@search", SqlDbType.NVarChar, 400)
+        {
+            Value = searchTerm is null ? DBNull.Value : $"%{searchTerm}%"
+        });
+
+        command.Parameters.Add(new SqlParameter("@includeInactive", SqlDbType.Bit)
+        {
+            Value = includeInactive
+        });
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            medicos.Add(ReadMedic(reader));
+        }
+    }
+    catch (SqlException ex)
+    {
+        return Results.Problem(
+            title: "Error al consultar médicos",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+    finally
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            await connection.CloseAsync();
+        }
+    }
+
+    return Results.Ok(medicos);
+});
+
+app.MapGet("/medics/{id:int}", async (int id, SqlConnection connection, CancellationToken cancellationToken) =>
+{
+    MedicDto? medico = null;
+
+    try
+    {
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = new SqlCommand(
+            """
+            SELECT Id, Primer_Nombre, Segundo_Nombre, Apellido_Paterno, Apellido_Materno, Cedula, Telefono, Especialidad, Email, Activo
+            FROM dbo.Medicos
+            WHERE Id = @id
+            """,
+            connection);
+
+        command.Parameters.Add(new SqlParameter("@id", SqlDbType.Int)
+        {
+            Value = id
+        });
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (reader.HasRows && await reader.ReadAsync(cancellationToken))
+        {
+            medico = ReadMedic(reader);
+        }
+    }
+    catch (SqlException ex)
+    {
+        return Results.Problem(
+            title: "Error al consultar médico",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+    finally
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            await connection.CloseAsync();
+        }
+    }
+
+    return medico is not null
+        ? Results.Ok(medico)
+        : Results.NotFound(new { message = "Médico no encontrado." });
+});
+
+app.MapPost("/medics", async (CreateMedicRequest request, SqlConnection connection, CancellationToken cancellationToken) =>
+{
+    var validationError = ValidateMedicRequest(request.PrimerNombre, request.ApellidoPaterno, request.Cedula, request.Email, request.Especialidad);
+    if (validationError is not null)
+    {
+        return Results.BadRequest(new { message = validationError });
+    }
+
+    MedicDto? medico = null;
+
+    try
+    {
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = new SqlCommand(
+            """
+            INSERT INTO dbo.Medicos (Primer_Nombre, Segundo_Nombre, Apellido_Paterno, Apellido_Materno, Cedula, Telefono, Especialidad, Email)
+            OUTPUT INSERTED.Id, INSERTED.Primer_Nombre, INSERTED.Segundo_Nombre, INSERTED.Apellido_Paterno, INSERTED.Apellido_Materno, INSERTED.Cedula, INSERTED.Telefono, INSERTED.Especialidad, INSERTED.Email, INSERTED.Activo
+            VALUES (@primerNombre, @segundoNombre, @apellidoPaterno, @apellidoMaterno, @cedula, @telefono, @especialidad, @correo)
+            """,
+            connection);
+
+        FillMedicParameters(command, request);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (reader.HasRows && await reader.ReadAsync(cancellationToken))
+        {
+            medico = ReadMedic(reader);
+        }
+    }
+    catch (SqlException ex)
+    {
+        return Results.Problem(
+            title: "Error al registrar médico",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+    finally
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            await connection.CloseAsync();
+        }
+    }
+
+    return medico is not null
+        ? Results.Created($"/medics/{medico.Id}", medico)
+        : Results.Problem(title: "No fue posible registrar al médico", statusCode: StatusCodes.Status500InternalServerError);
+});
+
+app.MapPut("/medics/{id:int}", async (int id, UpdateMedicRequest request, SqlConnection connection, CancellationToken cancellationToken) =>
+{
+    var validationError = ValidateMedicRequest(request.PrimerNombre, request.ApellidoPaterno, request.Cedula, request.Email, request.Especialidad);
+    if (validationError is not null)
+    {
+        return Results.BadRequest(new { message = validationError });
+    }
+
+    MedicDto? medico = null;
+
+    try
+    {
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = new SqlCommand(
+            """
+            UPDATE dbo.Medicos
+            SET Primer_Nombre = @primerNombre,
+                Segundo_Nombre = @segundoNombre,
+                Apellido_Paterno = @apellidoPaterno,
+                Apellido_Materno = @apellidoMaterno,
+                Cedula = @cedula,
+                Telefono = @telefono,
+                Especialidad = @especialidad,
+                Email = @correo,
+                Activo = @activo
+            OUTPUT INSERTED.Id, INSERTED.Primer_Nombre, INSERTED.Segundo_Nombre, INSERTED.Apellido_Paterno, INSERTED.Apellido_Materno, INSERTED.Cedula, INSERTED.Telefono, INSERTED.Especialidad, INSERTED.Email, INSERTED.Activo
+            WHERE Id = @id
+            """,
+            connection);
+
+        FillMedicParameters(command, request);
+        command.Parameters.Add(new SqlParameter("@activo", SqlDbType.Bit)
+        {
+            Value = request.Activo
+        });
+        command.Parameters.Add(new SqlParameter("@id", SqlDbType.Int)
+        {
+            Value = id
+        });
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        if (reader.HasRows && await reader.ReadAsync(cancellationToken))
+        {
+            medico = ReadMedic(reader);
+        }
+    }
+    catch (SqlException ex)
+    {
+        return Results.Problem(
+            title: "Error al actualizar médico",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+    finally
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            await connection.CloseAsync();
+        }
+    }
+
+    return medico is not null
+        ? Results.Ok(medico)
+        : Results.NotFound(new { message = "Médico no encontrado." });
+});
+
+app.MapDelete("/medics/{id:int}", async (int id, SqlConnection connection, CancellationToken cancellationToken) =>
+{
+    int affected;
+
+    try
+    {
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = new SqlCommand(
+            """
+            UPDATE dbo.Medicos
+            SET Activo = 0
+            WHERE Id = @id
+            """,
+            connection);
+
+        command.Parameters.Add(new SqlParameter("@id", SqlDbType.Int)
+        {
+            Value = id
+        });
+
+        affected = await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Problem(
+            title: "Error al desactivar médico",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+    finally
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            await connection.CloseAsync();
+        }
+    }
+
+    return affected > 0
+        ? Results.NoContent()
+        : Results.NotFound(new { message = "Médico no encontrado." });
+});
+
+app.MapGet("/users", async (string? search, bool includeInactive = false, SqlConnection connection, CancellationToken cancellationToken) =>
+{
+    var usuarios = new List<UserDto>();
+    var searchTerm = string.IsNullOrWhiteSpace(search) ? null : search.Trim();
+
+    try
+    {
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = new SqlCommand(
+            """
+            SELECT U.Id,
+                   U.Correo,
+                   U.Nombre_Completo,
+                   U.IdMedico,
+                   U.Activo,
+                   M.Primer_Nombre AS Medico_Primer_Nombre,
+                   M.Segundo_Nombre AS Medico_Segundo_Nombre,
+                   M.Apellido_Paterno AS Medico_Apellido_Paterno,
+                   M.Apellido_Materno AS Medico_Apellido_Materno
+            FROM dbo.Usuarios AS U
+            LEFT JOIN dbo.Medicos AS M ON U.IdMedico = M.Id
+            WHERE (@search IS NULL OR (
+                    U.Correo LIKE @search OR
+                    U.Nombre_Completo LIKE @search
+                ))
+              AND (@includeInactive = 1 OR U.Activo = 1)
+            ORDER BY U.Nombre_Completo ASC
+            """,
+            connection);
+
+        command.Parameters.Add(new SqlParameter("@search", SqlDbType.NVarChar, 400)
+        {
+            Value = searchTerm is null ? DBNull.Value : $"%{searchTerm}%"
+        });
+
+        command.Parameters.Add(new SqlParameter("@includeInactive", SqlDbType.Bit)
+        {
+            Value = includeInactive
+        });
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            usuarios.Add(ReadUser(reader));
+        }
+    }
+    catch (SqlException ex)
+    {
+        return Results.Problem(
+            title: "Error al consultar usuarios",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+    finally
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            await connection.CloseAsync();
+        }
+    }
+
+    return Results.Ok(usuarios);
+});
+
+app.MapPost("/users", async (CreateUserRequest request, SqlConnection connection, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Correo))
+    {
+        return Results.BadRequest(new { message = "El correo es obligatorio." });
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Password))
+    {
+        return Results.BadRequest(new { message = "La contraseña es obligatoria." });
+    }
+
+    if (string.IsNullOrWhiteSpace(request.NombreCompleto))
+    {
+        return Results.BadRequest(new { message = "El nombre completo es obligatorio." });
+    }
+
+    var passwordHash = ComputeSha1Hash(request.Password.Trim());
+
+    UserDto? usuario = null;
+
+    try
+    {
+        await connection.OpenAsync(cancellationToken);
+
+        int? insertedId = null;
+
+        await using (var command = new SqlCommand(
+                   """
+                   INSERT INTO dbo.Usuarios (Correo, PasswordHash, Nombre_Completo, IdMedico, Activo)
+                   OUTPUT INSERTED.Id
+                   VALUES (@correo, @passwordHash, @nombreCompleto, @idMedico, @activo)
+                   """,
+                   connection))
+        {
+            command.Parameters.Add(new SqlParameter("@correo", SqlDbType.NVarChar, 320)
+            {
+                Value = request.Correo.Trim()
+            });
+            command.Parameters.Add(new SqlParameter("@passwordHash", SqlDbType.NVarChar, 255)
+            {
+                Value = passwordHash
+            });
+            command.Parameters.Add(new SqlParameter("@nombreCompleto", SqlDbType.NVarChar, 200)
+            {
+                Value = request.NombreCompleto.Trim()
+            });
+            command.Parameters.Add(new SqlParameter("@idMedico", SqlDbType.Int)
+            {
+                Value = request.MedicoId.HasValue ? request.MedicoId.Value : DBNull.Value
+            });
+            command.Parameters.Add(new SqlParameter("@activo", SqlDbType.Bit)
+            {
+                Value = request.Activo
+            });
+
+            var result = await command.ExecuteScalarAsync(cancellationToken);
+
+            if (result is not null)
+            {
+                insertedId = Convert.ToInt32(result);
+            }
+        }
+
+        if (insertedId.HasValue)
+        {
+            usuario = await FetchUserByIdAsync(connection, insertedId.Value, cancellationToken);
+        }
+    }
+    catch (SqlException ex)
+    {
+        return Results.Problem(
+            title: "Error al registrar usuario",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+    finally
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            await connection.CloseAsync();
+        }
+    }
+
+    return usuario is not null
+        ? Results.Created($"/users/{usuario.Id}", usuario)
+        : Results.Problem(title: "No fue posible registrar al usuario", statusCode: StatusCodes.Status500InternalServerError);
+});
+
+app.MapPut("/users/{id:int}", async (int id, UpdateUserRequest request, SqlConnection connection, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Correo))
+    {
+        return Results.BadRequest(new { message = "El correo es obligatorio." });
+    }
+
+    if (string.IsNullOrWhiteSpace(request.NombreCompleto))
+    {
+        return Results.BadRequest(new { message = "El nombre completo es obligatorio." });
+    }
+
+    var updateFields = new List<string>
+    {
+        "Correo = @correo",
+        "Nombre_Completo = @nombreCompleto",
+        "IdMedico = @idMedico",
+        "Activo = @activo"
+    };
+
+    var passwordProvided = !string.IsNullOrWhiteSpace(request.Password);
+    if (passwordProvided)
+    {
+        updateFields.Add("PasswordHash = @passwordHash");
+    }
+
+    UserDto? usuario = null;
+
+    try
+    {
+        await connection.OpenAsync(cancellationToken);
+
+        var commandText = $"UPDATE dbo.Usuarios SET {string.Join(", ", updateFields)} WHERE Id = @id";
+
+        var rowsAffected = 0;
+
+        await using (var command = new SqlCommand(commandText, connection))
+        {
+            command.Parameters.Add(new SqlParameter("@correo", SqlDbType.NVarChar, 320)
+            {
+                Value = request.Correo.Trim()
+            });
+            command.Parameters.Add(new SqlParameter("@nombreCompleto", SqlDbType.NVarChar, 200)
+            {
+                Value = request.NombreCompleto.Trim()
+            });
+            command.Parameters.Add(new SqlParameter("@idMedico", SqlDbType.Int)
+            {
+                Value = request.MedicoId.HasValue ? request.MedicoId.Value : DBNull.Value
+            });
+            command.Parameters.Add(new SqlParameter("@activo", SqlDbType.Bit)
+            {
+                Value = request.Activo
+            });
+            command.Parameters.Add(new SqlParameter("@id", SqlDbType.Int)
+            {
+                Value = id
+            });
+
+            if (passwordProvided)
+            {
+                command.Parameters.Add(new SqlParameter("@passwordHash", SqlDbType.NVarChar, 255)
+                {
+                    Value = ComputeSha1Hash(request.Password!.Trim())
+                });
+            }
+
+            rowsAffected = await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        if (rowsAffected > 0)
+        {
+            usuario = await FetchUserByIdAsync(connection, id, cancellationToken);
+        }
+    }
+    catch (SqlException ex)
+    {
+        return Results.Problem(
+            title: "Error al actualizar usuario",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+    finally
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            await connection.CloseAsync();
+        }
+    }
+
+    return usuario is not null
+        ? Results.Ok(usuario)
+        : Results.NotFound(new { message = "Usuario no encontrado." });
+});
+
+app.MapDelete("/users/{id:int}", async (int id, SqlConnection connection, CancellationToken cancellationToken) =>
+{
+    int affected;
+
+    try
+    {
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = new SqlCommand(
+            """
+            UPDATE dbo.Usuarios
+            SET Activo = 0
+            WHERE Id = @id
+            """,
+            connection);
+
+        command.Parameters.Add(new SqlParameter("@id", SqlDbType.Int)
+        {
+            Value = id
+        });
+
+        affected = await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+    catch (SqlException ex)
+    {
+        return Results.Problem(
+            title: "Error al desactivar usuario",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+    finally
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            await connection.CloseAsync();
+        }
+    }
+
+    return affected > 0
+        ? Results.NoContent()
+        : Results.NotFound(new { message = "Usuario no encontrado." });
 });
 
 app.MapGet("/patients", async (string? search, SqlConnection connection, CancellationToken cancellationToken) =>
@@ -580,6 +1143,217 @@ app.MapPost("/consultations", async (CreateConsultationRequest request, SqlConne
         : Results.Problem(title: "No fue posible registrar la consulta", statusCode: StatusCodes.Status500InternalServerError);
 });
 
+static MedicDto ReadMedic(SqlDataReader reader)
+{
+    var primerNombre = reader.GetString(reader.GetOrdinal("Primer_Nombre"));
+    var segundoNombre = reader.IsDBNull(reader.GetOrdinal("Segundo_Nombre"))
+        ? null
+        : reader.GetString(reader.GetOrdinal("Segundo_Nombre"));
+    var apellidoPaterno = reader.GetString(reader.GetOrdinal("Apellido_Paterno"));
+    var apellidoMaterno = reader.IsDBNull(reader.GetOrdinal("Apellido_Materno"))
+        ? null
+        : reader.GetString(reader.GetOrdinal("Apellido_Materno"));
+
+    var nombreCompleto = BuildMedicFullName(primerNombre, segundoNombre, apellidoPaterno, apellidoMaterno);
+
+    var telefono = reader.IsDBNull(reader.GetOrdinal("Telefono"))
+        ? null
+        : reader.GetString(reader.GetOrdinal("Telefono"));
+
+    return new MedicDto(
+        reader.GetInt32(reader.GetOrdinal("Id")),
+        primerNombre,
+        segundoNombre,
+        apellidoPaterno,
+        apellidoMaterno,
+        reader.GetString(reader.GetOrdinal("Cedula")),
+        reader.GetString(reader.GetOrdinal("Especialidad")),
+        reader.GetString(reader.GetOrdinal("Email")),
+        telefono,
+        reader.GetBoolean(reader.GetOrdinal("Activo")),
+        nombreCompleto);
+}
+
+static void FillMedicParameters(SqlCommand command, MedicRequestBase request)
+{
+    command.Parameters.Add(new SqlParameter("@primerNombre", SqlDbType.NVarChar, 100)
+    {
+        Value = request.PrimerNombre.Trim()
+    });
+
+    command.Parameters.Add(new SqlParameter("@segundoNombre", SqlDbType.NVarChar, 100)
+    {
+        Value = string.IsNullOrWhiteSpace(request.SegundoNombre)
+            ? DBNull.Value
+            : request.SegundoNombre.Trim()
+    });
+
+    command.Parameters.Add(new SqlParameter("@apellidoPaterno", SqlDbType.NVarChar, 100)
+    {
+        Value = request.ApellidoPaterno.Trim()
+    });
+
+    command.Parameters.Add(new SqlParameter("@apellidoMaterno", SqlDbType.NVarChar, 100)
+    {
+        Value = string.IsNullOrWhiteSpace(request.ApellidoMaterno)
+            ? DBNull.Value
+            : request.ApellidoMaterno.Trim()
+    });
+
+    command.Parameters.Add(new SqlParameter("@cedula", SqlDbType.NVarChar, 50)
+    {
+        Value = request.Cedula.Trim()
+    });
+
+    command.Parameters.Add(new SqlParameter("@telefono", SqlDbType.NVarChar, 25)
+    {
+        Value = string.IsNullOrWhiteSpace(request.Telefono)
+            ? DBNull.Value
+            : request.Telefono.Trim()
+    });
+
+    command.Parameters.Add(new SqlParameter("@especialidad", SqlDbType.NVarChar, 150)
+    {
+        Value = request.Especialidad.Trim()
+    });
+
+    command.Parameters.Add(new SqlParameter("@correo", SqlDbType.NVarChar, 320)
+    {
+        Value = request.Email.Trim()
+    });
+}
+
+static string? ValidateMedicRequest(string? primerNombre, string? apellidoPaterno, string? cedula, string? correo, string? especialidad)
+{
+    if (string.IsNullOrWhiteSpace(primerNombre))
+    {
+        return "El primer nombre es obligatorio.";
+    }
+
+    if (string.IsNullOrWhiteSpace(apellidoPaterno))
+    {
+        return "El apellido paterno es obligatorio.";
+    }
+
+    if (string.IsNullOrWhiteSpace(cedula))
+    {
+        return "La cédula profesional es obligatoria.";
+    }
+
+    if (string.IsNullOrWhiteSpace(correo))
+    {
+        return "El correo electrónico es obligatorio.";
+    }
+
+    if (string.IsNullOrWhiteSpace(especialidad))
+    {
+        return "La especialidad es obligatoria.";
+    }
+
+    return null;
+}
+
+static async Task<UserDto?> FetchUserByIdAsync(SqlConnection connection, int id, CancellationToken cancellationToken)
+{
+    await using var command = new SqlCommand(
+        """
+        SELECT U.Id,
+               U.Correo,
+               U.Nombre_Completo,
+               U.IdMedico,
+               U.Activo,
+               M.Primer_Nombre AS Medico_Primer_Nombre,
+               M.Segundo_Nombre AS Medico_Segundo_Nombre,
+               M.Apellido_Paterno AS Medico_Apellido_Paterno,
+               M.Apellido_Materno AS Medico_Apellido_Materno
+        FROM dbo.Usuarios AS U
+        LEFT JOIN dbo.Medicos AS M ON U.IdMedico = M.Id
+        WHERE U.Id = @id
+        """,
+        connection);
+
+    command.Parameters.Add(new SqlParameter("@id", SqlDbType.Int)
+    {
+        Value = id
+    });
+
+    await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+
+    if (reader.HasRows && await reader.ReadAsync(cancellationToken))
+    {
+        return ReadUser(reader);
+    }
+
+    return null;
+}
+
+static UserDto ReadUser(SqlDataReader reader)
+{
+    int? medicoId = null;
+    string? medicoNombreCompleto = null;
+
+    var medicoIdOrdinal = reader.GetOrdinal("IdMedico");
+    if (!reader.IsDBNull(medicoIdOrdinal))
+    {
+        medicoId = reader.GetInt32(medicoIdOrdinal);
+
+        var primerNombre = reader.IsDBNull(reader.GetOrdinal("Medico_Primer_Nombre"))
+            ? null
+            : reader.GetString(reader.GetOrdinal("Medico_Primer_Nombre"));
+        var segundoNombre = reader.IsDBNull(reader.GetOrdinal("Medico_Segundo_Nombre"))
+            ? null
+            : reader.GetString(reader.GetOrdinal("Medico_Segundo_Nombre"));
+        var apellidoPaterno = reader.IsDBNull(reader.GetOrdinal("Medico_Apellido_Paterno"))
+            ? null
+            : reader.GetString(reader.GetOrdinal("Medico_Apellido_Paterno"));
+        var apellidoMaterno = reader.IsDBNull(reader.GetOrdinal("Medico_Apellido_Materno"))
+            ? null
+            : reader.GetString(reader.GetOrdinal("Medico_Apellido_Materno"));
+
+        if (!string.IsNullOrWhiteSpace(primerNombre) && !string.IsNullOrWhiteSpace(apellidoPaterno))
+        {
+            medicoNombreCompleto = BuildMedicFullName(primerNombre, segundoNombre, apellidoPaterno, apellidoMaterno);
+        }
+    }
+
+    return new UserDto(
+        reader.GetInt32(reader.GetOrdinal("Id")),
+        reader.GetString(reader.GetOrdinal("Correo")),
+        reader.GetString(reader.GetOrdinal("Nombre_Completo")),
+        reader.GetBoolean(reader.GetOrdinal("Activo")),
+        medicoId,
+        medicoNombreCompleto);
+}
+
+static string BuildMedicFullName(string primerNombre, string? segundoNombre, string apellidoPaterno, string? apellidoMaterno)
+{
+    var partes = new List<string>
+    {
+        primerNombre.Trim()
+    };
+
+    if (!string.IsNullOrWhiteSpace(segundoNombre))
+    {
+        partes.Add(segundoNombre.Trim());
+    }
+
+    partes.Add(apellidoPaterno.Trim());
+
+    if (!string.IsNullOrWhiteSpace(apellidoMaterno))
+    {
+        partes.Add(apellidoMaterno.Trim());
+    }
+
+    return string.Join(" ", partes);
+}
+
+static string ComputeSha1Hash(string value)
+{
+    var bytes = Encoding.UTF8.GetBytes(value);
+    var hash = SHA1.HashData(bytes);
+    return Convert.ToHexString(hash);
+}
+
 app.Run();
 
 static string FormatDateOnly(DateTime dateTime)
@@ -668,3 +1442,12 @@ record ConsultationDto(int Id, int PacienteId, string Fecha, string Notas);
 record ConsultationHistoryDto(int Id, int PacienteId, string Fecha, string Notas, PatientSummaryDto Paciente);
 record CreatePatientRequest(string NombreCompleto, string FechaNacimiento, string Sexo);
 record CreateConsultationRequest(int PacienteId, string Notas, string? Fecha);
+record MedicDto(int Id, string PrimerNombre, string? SegundoNombre, string ApellidoPaterno, string? ApellidoMaterno, string Cedula, string Especialidad, string Email, string? Telefono, bool Activo, string NombreCompleto);
+record MedicRequestBase(string PrimerNombre, string? SegundoNombre, string ApellidoPaterno, string? ApellidoMaterno, string Cedula, string Especialidad, string Email, string? Telefono);
+record CreateMedicRequest(string PrimerNombre, string? SegundoNombre, string ApellidoPaterno, string? ApellidoMaterno, string Cedula, string Especialidad, string Email, string? Telefono)
+    : MedicRequestBase(PrimerNombre, SegundoNombre, ApellidoPaterno, ApellidoMaterno, Cedula, Especialidad, Email, Telefono);
+record UpdateMedicRequest(string PrimerNombre, string? SegundoNombre, string ApellidoPaterno, string? ApellidoMaterno, string Cedula, string Especialidad, string Email, string? Telefono, bool Activo)
+    : MedicRequestBase(PrimerNombre, SegundoNombre, ApellidoPaterno, ApellidoMaterno, Cedula, Especialidad, Email, Telefono);
+record UserDto(int Id, string Correo, string NombreCompleto, bool Activo, int? MedicoId, string? MedicoNombreCompleto);
+record CreateUserRequest(string Correo, string Password, string NombreCompleto, int? MedicoId, bool Activo);
+record UpdateUserRequest(string Correo, string? Password, string NombreCompleto, int? MedicoId, bool Activo);

@@ -2,8 +2,14 @@ import type {
   Consultation,
   ConsultationHistoryEntry,
   CreateConsultationPayload,
+  CreateMedicPayload,
   CreatePatientPayload,
-  Patient
+  CreateUserPayload,
+  Medic,
+  Patient,
+  UpdateMedicPayload,
+  UpdateUserPayload,
+  UserAccount
 } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:7240'
@@ -115,4 +121,72 @@ export async function getConsultationsHistory(
   const queryString = query.toString()
   const path = queryString ? `/consultations?${queryString}` : '/consultations'
   return request<ConsultationHistoryEntry[]>(path, { method: 'GET' })
+}
+
+export async function getMedics(searchTerm?: string, includeInactive = false): Promise<Medic[]> {
+  const query = new URLSearchParams()
+
+  if (searchTerm?.trim()) {
+    query.set('search', searchTerm.trim())
+  }
+
+  if (includeInactive) {
+    query.set('includeInactive', 'true')
+  }
+
+  const queryString = query.toString()
+  const path = queryString ? `/medics?${queryString}` : '/medics'
+  return request<Medic[]>(path, { method: 'GET' })
+}
+
+export async function createMedic(payload: CreateMedicPayload): Promise<Medic> {
+  return request<Medic>('/medics', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateMedic(id: number, payload: UpdateMedicPayload): Promise<Medic> {
+  return request<Medic>(`/medics/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function disableMedic(id: number): Promise<void> {
+  await request(`/medics/${id}`, { method: 'DELETE', skipJsonParsing: true })
+}
+
+export async function getUsers(searchTerm?: string, includeInactive = false): Promise<UserAccount[]> {
+  const query = new URLSearchParams()
+
+  if (searchTerm?.trim()) {
+    query.set('search', searchTerm.trim())
+  }
+
+  if (includeInactive) {
+    query.set('includeInactive', 'true')
+  }
+
+  const queryString = query.toString()
+  const path = queryString ? `/users?${queryString}` : '/users'
+  return request<UserAccount[]>(path, { method: 'GET' })
+}
+
+export async function createUser(payload: CreateUserPayload): Promise<UserAccount> {
+  return request<UserAccount>('/users', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateUser(id: number, payload: UpdateUserPayload): Promise<UserAccount> {
+  return request<UserAccount>(`/users/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function disableUser(id: number): Promise<void> {
+  await request(`/users/${id}`, { method: 'DELETE', skipJsonParsing: true })
 }

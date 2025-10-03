@@ -191,6 +191,322 @@ BEGIN
 END;
 GO
 
+IF OBJECT_ID(N'dbo.procMedicosBuscar', N'P') IS NOT NULL
+BEGIN
+    DROP PROCEDURE dbo.procMedicosBuscar;
+END;
+GO
+
+CREATE PROCEDURE dbo.procMedicosBuscar
+    @pBusqueda NVARCHAR(200) = NULL,
+    @pIncluirInactivos BIT = 0
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @BusquedaInterna NVARCHAR(200);
+    SET @BusquedaInterna = NULLIF(LTRIM(RTRIM(@pBusqueda)), '');
+
+    SELECT
+        M.Id,
+        M.Primer_Nombre,
+        M.Segundo_Nombre,
+        M.Apellido_Paterno,
+        M.Apellido_Materno,
+        M.Cedula,
+        M.Telefono,
+        M.Especialidad,
+        M.Email,
+        M.Activo,
+        NombreCompleto = LTRIM(RTRIM(
+            M.Primer_Nombre + ' ' +
+            COALESCE(NULLIF(M.Segundo_Nombre, '') + ' ', '') +
+            M.Apellido_Paterno + ' ' +
+            COALESCE(NULLIF(M.Apellido_Materno, ''), '')
+        ))
+    FROM dbo.Medicos AS M
+    WHERE (
+            @BusquedaInterna IS NULL
+            OR M.Primer_Nombre LIKE '%' + @BusquedaInterna + '%'
+            OR M.Segundo_Nombre LIKE '%' + @BusquedaInterna + '%'
+            OR M.Apellido_Paterno LIKE '%' + @BusquedaInterna + '%'
+            OR M.Apellido_Materno LIKE '%' + @BusquedaInterna + '%'
+            OR M.Email LIKE '%' + @BusquedaInterna + '%'
+            OR M.Cedula LIKE '%' + @BusquedaInterna + '%'
+        )
+      AND (@pIncluirInactivos = 1 OR M.Activo = 1)
+    ORDER BY M.Apellido_Paterno, M.Apellido_Materno, M.Primer_Nombre;
+END;
+GO
+
+IF OBJECT_ID(N'dbo.procMedicosCrear', N'P') IS NOT NULL
+BEGIN
+    DROP PROCEDURE dbo.procMedicosCrear;
+END;
+GO
+
+CREATE PROCEDURE dbo.procMedicosCrear
+    @pPrimerNombre NVARCHAR(100),
+    @pSegundoNombre NVARCHAR(100) = NULL,
+    @pApellidoPaterno NVARCHAR(100),
+    @pApellidoMaterno NVARCHAR(100) = NULL,
+    @pCedula NVARCHAR(50),
+    @pTelefono NVARCHAR(25) = NULL,
+    @pEspecialidad NVARCHAR(150),
+    @pEmail NVARCHAR(320)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT INTO dbo.Medicos (Primer_Nombre, Segundo_Nombre, Apellido_Paterno, Apellido_Materno, Cedula, Telefono, Especialidad, Email)
+    VALUES (@pPrimerNombre, NULLIF(@pSegundoNombre, ''), @pApellidoPaterno, NULLIF(@pApellidoMaterno, ''), @pCedula, NULLIF(@pTelefono, ''), @pEspecialidad, @pEmail);
+
+    DECLARE @NuevoId INT = SCOPE_IDENTITY();
+
+    SELECT
+        M.Id,
+        M.Primer_Nombre,
+        M.Segundo_Nombre,
+        M.Apellido_Paterno,
+        M.Apellido_Materno,
+        M.Cedula,
+        M.Telefono,
+        M.Especialidad,
+        M.Email,
+        M.Activo,
+        NombreCompleto = LTRIM(RTRIM(
+            M.Primer_Nombre + ' ' +
+            COALESCE(NULLIF(M.Segundo_Nombre, '') + ' ', '') +
+            M.Apellido_Paterno + ' ' +
+            COALESCE(NULLIF(M.Apellido_Materno, ''), '')
+        ))
+    FROM dbo.Medicos AS M
+    WHERE M.Id = @NuevoId;
+END;
+GO
+
+IF OBJECT_ID(N'dbo.procMedicosActualizar', N'P') IS NOT NULL
+BEGIN
+    DROP PROCEDURE dbo.procMedicosActualizar;
+END;
+GO
+
+CREATE PROCEDURE dbo.procMedicosActualizar
+    @pId INT,
+    @pPrimerNombre NVARCHAR(100),
+    @pSegundoNombre NVARCHAR(100) = NULL,
+    @pApellidoPaterno NVARCHAR(100),
+    @pApellidoMaterno NVARCHAR(100) = NULL,
+    @pCedula NVARCHAR(50),
+    @pTelefono NVARCHAR(25) = NULL,
+    @pEspecialidad NVARCHAR(150),
+    @pEmail NVARCHAR(320),
+    @pActivo BIT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE dbo.Medicos
+    SET Primer_Nombre = @pPrimerNombre,
+        Segundo_Nombre = NULLIF(@pSegundoNombre, ''),
+        Apellido_Paterno = @pApellidoPaterno,
+        Apellido_Materno = NULLIF(@pApellidoMaterno, ''),
+        Cedula = @pCedula,
+        Telefono = NULLIF(@pTelefono, ''),
+        Especialidad = @pEspecialidad,
+        Email = @pEmail,
+        Activo = @pActivo
+    WHERE Id = @pId;
+
+    IF @@ROWCOUNT = 0
+    BEGIN
+        RETURN;
+    END;
+
+    SELECT
+        M.Id,
+        M.Primer_Nombre,
+        M.Segundo_Nombre,
+        M.Apellido_Paterno,
+        M.Apellido_Materno,
+        M.Cedula,
+        M.Telefono,
+        M.Especialidad,
+        M.Email,
+        M.Activo,
+        NombreCompleto = LTRIM(RTRIM(
+            M.Primer_Nombre + ' ' +
+            COALESCE(NULLIF(M.Segundo_Nombre, '') + ' ', '') +
+            M.Apellido_Paterno + ' ' +
+            COALESCE(NULLIF(M.Apellido_Materno, ''), '')
+        ))
+    FROM dbo.Medicos AS M
+    WHERE M.Id = @pId;
+END;
+GO
+
+IF OBJECT_ID(N'dbo.procMedicosDesactivar', N'P') IS NOT NULL
+BEGIN
+    DROP PROCEDURE dbo.procMedicosDesactivar;
+END;
+GO
+
+CREATE PROCEDURE dbo.procMedicosDesactivar
+    @pId INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE dbo.Medicos
+    SET Activo = 0
+    WHERE Id = @pId;
+
+    SELECT @@ROWCOUNT AS FilasAfectadas;
+END;
+GO
+
+IF OBJECT_ID(N'dbo.procUsuariosBuscar', N'P') IS NOT NULL
+BEGIN
+    DROP PROCEDURE dbo.procUsuariosBuscar;
+END;
+GO
+
+CREATE PROCEDURE dbo.procUsuariosBuscar
+    @pBusqueda NVARCHAR(200) = NULL,
+    @pIncluirInactivos BIT = 0
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @BusquedaInterna NVARCHAR(200);
+    SET @BusquedaInterna = NULLIF(LTRIM(RTRIM(@pBusqueda)), '');
+
+    SELECT
+        U.Id,
+        U.Correo,
+        U.Nombre_Completo,
+        U.IdMedico,
+        U.Activo,
+        MedicoNombre = LTRIM(RTRIM(
+            COALESCE(M.Primer_Nombre, '') + ' ' +
+            COALESCE(NULLIF(M.Segundo_Nombre, '') + ' ', '') +
+            COALESCE(M.Apellido_Paterno, '') + ' ' +
+            COALESCE(NULLIF(M.Apellido_Materno, ''), '')
+        ))
+    FROM dbo.Usuarios AS U
+    LEFT JOIN dbo.Medicos AS M ON U.IdMedico = M.Id
+    WHERE (
+            @BusquedaInterna IS NULL
+            OR U.Correo LIKE '%' + @BusquedaInterna + '%'
+            OR U.Nombre_Completo LIKE '%' + @BusquedaInterna + '%'
+        )
+      AND (@pIncluirInactivos = 1 OR U.Activo = 1)
+    ORDER BY U.Nombre_Completo;
+END;
+GO
+
+IF OBJECT_ID(N'dbo.procUsuariosCrear', N'P') IS NOT NULL
+BEGIN
+    DROP PROCEDURE dbo.procUsuariosCrear;
+END;
+GO
+
+CREATE PROCEDURE dbo.procUsuariosCrear
+    @pCorreo NVARCHAR(320),
+    @pPassword NVARCHAR(255),
+    @pNombreCompleto NVARCHAR(200),
+    @pIdMedico INT = NULL,
+    @pActivo BIT = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @Hash NVARCHAR(255) = CONVERT(VARCHAR(255), HASHBYTES('SHA1', CONVERT(NVARCHAR(4000), @pPassword)), 2);
+
+    INSERT INTO dbo.Usuarios (Correo, PasswordHash, Nombre_Completo, IdMedico, Activo)
+    VALUES (@pCorreo, @Hash, @pNombreCompleto, @pIdMedico, @pActivo);
+
+    DECLARE @NuevoId INT = SCOPE_IDENTITY();
+
+    SELECT
+        U.Id,
+        U.Correo,
+        U.Nombre_Completo,
+        U.IdMedico,
+        U.Activo
+    FROM dbo.Usuarios AS U
+    WHERE U.Id = @NuevoId;
+END;
+GO
+
+IF OBJECT_ID(N'dbo.procUsuariosActualizar', N'P') IS NOT NULL
+BEGIN
+    DROP PROCEDURE dbo.procUsuariosActualizar;
+END;
+GO
+
+CREATE PROCEDURE dbo.procUsuariosActualizar
+    @pId INT,
+    @pCorreo NVARCHAR(320),
+    @pNombreCompleto NVARCHAR(200),
+    @pIdMedico INT = NULL,
+    @pActivo BIT,
+    @pPassword NVARCHAR(255) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @Hash NVARCHAR(255);
+
+    IF NULLIF(@pPassword, '') IS NOT NULL
+    BEGIN
+        SET @Hash = CONVERT(VARCHAR(255), HASHBYTES('SHA1', CONVERT(NVARCHAR(4000), @pPassword)), 2);
+    END;
+
+    UPDATE dbo.Usuarios
+    SET Correo = @pCorreo,
+        Nombre_Completo = @pNombreCompleto,
+        IdMedico = @pIdMedico,
+        Activo = @pActivo,
+        PasswordHash = COALESCE(@Hash, PasswordHash)
+    WHERE Id = @pId;
+
+    IF @@ROWCOUNT = 0
+    BEGIN
+        RETURN;
+    END;
+
+    SELECT
+        U.Id,
+        U.Correo,
+        U.Nombre_Completo,
+        U.IdMedico,
+        U.Activo
+    FROM dbo.Usuarios AS U
+    WHERE U.Id = @pId;
+END;
+GO
+
+IF OBJECT_ID(N'dbo.procUsuariosDesactivar', N'P') IS NOT NULL
+BEGIN
+    DROP PROCEDURE dbo.procUsuariosDesactivar;
+END;
+GO
+
+CREATE PROCEDURE dbo.procUsuariosDesactivar
+    @pId INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE dbo.Usuarios
+    SET Activo = 0
+    WHERE Id = @pId;
+
+    SELECT @@ROWCOUNT AS FilasAfectadas;
+END;
+GO
+
 /* =========================================================
    Datos iniciales
    ========================================================= */
