@@ -8,6 +8,13 @@ import LoginForm from '../components/LoginForm.vue'
       class="mx-auto flex min-h-screen w-full max-w-6xl flex-col items-center justify-center gap-16 px-6 py-16 lg:flex-row lg:py-24"
     >
       <section class="flex-1 space-y-6 text-center lg:text-left">
+        <div class="flex items-center justify-center lg:justify-start">
+          <img
+            src="@/assets/logo-magica.svg"
+            alt="Logo Clínica Mágica"
+            class="h-16 w-auto"
+          />
+        </div>
         <p class="text-xs uppercase tracking-[0.35em] text-sky-400/80">Clínica Mágica</p>
         <h1 class="text-3xl font-semibold leading-tight text-white md:text-4xl">
           Plataforma integral para el control operativo de tu clínica
