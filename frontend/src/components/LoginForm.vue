@@ -88,15 +88,8 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
-
-interface LoginResponse {
-  message: string
-  usuario?: {
-    id: number
-    correo: string
-    nombreCompleto: string
-  }
-}
+import { useRouter } from 'vue-router'
+import { useSession } from '../composables/useSession'
 
 const email = ref('')
 const password = ref('')
@@ -106,6 +99,9 @@ const state = reactive<{ status: 'idle' | 'success' | 'error'; message: string }
   message: ''
 })
 
+const router = useRouter()
+const { login } = useSession()
+
 const feedback = computed(() => {
   if (state.status === 'idle') return null
   return {
@@ -113,8 +109,6 @@ const feedback = computed(() => {
     message: state.message
   }
 })
-
-const apiBaseUrl = computed(() => import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:7240')
 
 async function onSubmit() {
   if (isSubmitting.value) return
@@ -124,26 +118,11 @@ async function onSubmit() {
   isSubmitting.value = true
 
   try {
-    const response = await fetch(`${apiBaseUrl.value}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        email: email.value.trim(),
-        password: password.value
-      })
-    })
-
-    const data = (await response.json()) as LoginResponse
-
-    if (!response.ok) {
-      throw new Error(data?.message ?? 'No fue posible validar tus credenciales.')
-    }
-
+    const response = await login(email.value, password.value)
     state.status = 'success'
-    state.message = data.message ?? '¡Bienvenido de nuevo!'
+    state.message = response.message ?? '¡Bienvenido de nuevo!'
     password.value = ''
+    router.push({ name: 'dashboard' })
   } catch (error) {
     state.status = 'error'
     state.message =
