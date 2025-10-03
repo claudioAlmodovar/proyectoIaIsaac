@@ -29,3 +29,57 @@ export interface CreateConsultationPayload {
   notas: string
   fecha?: string
 }
+
+export interface Medic {
+  id: number
+  primerNombre: string
+  segundoNombre?: string | null
+  apellidoPaterno: string
+  apellidoMaterno?: string | null
+  cedula: string
+  especialidad: string
+  email: string
+  telefono?: string | null
+  activo: boolean
+  nombreCompleto: string
+}
+
+export interface CreateMedicPayload {
+  primerNombre: string
+  segundoNombre?: string | null
+  apellidoPaterno: string
+  apellidoMaterno?: string | null
+  cedula: string
+  especialidad: string
+  email: string
+  telefono?: string | null
+}
+
+export interface UpdateMedicPayload extends CreateMedicPayload {
+  activo: boolean
+}
+
+export interface UserAccount {
+  id: number
+  correo: string
+  nombreCompleto: string
+  activo: boolean
+  medicoId?: number | null
+  medicoNombreCompleto?: string | null
+}
+
+export interface CreateUserPayload {
+  correo: string
+  password: string
+  nombreCompleto: string
+  medicoId?: number | null
+  activo: boolean
+}
+
+export interface UpdateUserPayload {
+  correo: string
+  password?: string | null
+  nombreCompleto: string
+  medicoId?: number | null
+  activo: boolean
+}
